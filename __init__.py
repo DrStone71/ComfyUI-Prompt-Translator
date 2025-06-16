@@ -57,8 +57,15 @@ class ArgosTranslateManager:
     
     @classmethod
     def get_language_list(cls):
-        """Restituisce la lista delle lingue per il menu dropdown"""
-        return list(cls.LANGUAGE_MAP.keys())
+        """Restituisce la lista delle lingue per il menu dropdown con nomi completi"""
+        return [f"{code} - {name}" for code, name in cls.LANGUAGE_MAP.items()]
+    
+    @classmethod
+    def get_language_code_from_display(cls, display_name):
+        """Estrae il codice lingua dal nome visualizzato"""
+        if " - " in display_name:
+            return display_name.split(" - ")[0]
+        return display_name
     
     @classmethod
     def get_language_display_names(cls):
@@ -203,53 +210,57 @@ class ArgosTranslateManager:
                 cls._downloading.discard(package_key)
     
     @classmethod
-    def translate_text(cls, text, source_lang="auto", target_lang="en"):
+    def translate_text(cls, text, source_lang="auto - Auto-detect", target_lang="en - English"):
         """Traduce il testo usando Argos Translate, scaricando i pacchetti se necessario"""
         if not text or not text.strip():
             return text
         
         try:
+            # Estrai i codici lingua dai nomi visualizzati
+            source_code = cls.get_language_code_from_display(source_lang)
+            target_code = cls.get_language_code_from_display(target_lang)
+            
             # Auto-rilevamento se necessario
-            if source_lang == "auto":
+            if source_code == "auto":
                 detected_lang = cls.simple_language_detect(text)
                 print(f"Auto-detected language: {detected_lang} ({cls.LANGUAGE_MAP.get(detected_lang, 'Unknown')})")
-                source_lang = detected_lang
+                source_code = detected_lang
             
             # Se è già nella lingua target, restituisci il testo originale
-            if source_lang == target_lang:
-                print(f"Text is already in target language ({target_lang})")
+            if source_code == target_code:
+                print(f"Text is already in target language ({target_code})")
                 return text
             
             # Assicura che il pacchetto di traduzione sia installato
-            if not cls.ensure_translation_package(source_lang, target_lang):
-                print(f"Could not ensure translation package for {source_lang}->{target_lang}")
+            if not cls.ensure_translation_package(source_code, target_code):
+                print(f"Could not ensure translation package for {source_code}->{target_code}")
                 return text
             
             # Ottieni le lingue installate (refresh dopo possibile download)
             installed_languages = argostranslate.translate.get_installed_languages()
             
             # Trova le lingue sorgente e target
-            source_language = next((lang for lang in installed_languages if lang.code == source_lang), None)
-            target_language = next((lang for lang in installed_languages if lang.code == target_lang), None)
+            source_language = next((lang for lang in installed_languages if lang.code == source_code), None)
+            target_language = next((lang for lang in installed_languages if lang.code == target_code), None)
             
             if source_language is None:
-                print(f"Source language '{source_lang}' not available after package check")
+                print(f"Source language '{source_code}' not available after package check")
                 return text
             
             if target_language is None:
-                print(f"Target language '{target_lang}' not available after package check")
+                print(f"Target language '{target_code}' not available after package check")
                 return text
             
             # Ottieni la traduzione
             translation = source_language.get_translation(target_language)
             
             if translation is None:
-                print(f"No translation model available from '{source_lang}' to '{target_lang}'")
+                print(f"No translation model available from '{source_code}' to '{target_code}'")
                 return text
             
             # Esegui la traduzione
             translated_text = translation.translate(text)
-            print(f"Translated ({source_lang}->{target_lang}): {text[:50]}{'...' if len(text) > 50 else ''}")
+            print(f"Translated ({source_code}->{target_code}): {text[:50]}{'...' if len(text) > 50 else ''}")
             
             return translated_text
             
@@ -266,8 +277,8 @@ class AT_CLIPTextTranslate:
             "required": {
                 "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
                 "clip": ("CLIP", ),
-                "source_language": (language_list, {"default": "auto"}),
-                "target_language": (language_list, {"default": "en"})
+                "source_language": (language_list, {"default": "auto - Auto-detect"}),
+                "target_language": (language_list, {"default": "en - English"})
             }
         }
     
@@ -275,7 +286,7 @@ class AT_CLIPTextTranslate:
     FUNCTION = "encode"
     CATEGORY = "conditioning"
     
-    def encode(self, clip, text, source_language="auto", target_language="en"):
+    def encode(self, clip, text, source_language="auto - Auto-detect", target_language="en - English"):
         if text.strip():
             text = ArgosTranslateManager.translate_text(text, source_language, target_language)
         
@@ -290,8 +301,8 @@ class AT_PromptTextTranslate:
         return {
             "required": {
                 "prompt": ("STRING", {"default": "prompt", "multiline": True}),
-                "source_language": (language_list, {"default": "auto"}),
-                "target_language": (language_list, {"default": "en"})
+                "source_language": (language_list, {"default": "auto - Auto-detect"}),
+                "target_language": (language_list, {"default": "en - English"})
             }
         }
     
@@ -300,7 +311,7 @@ class AT_PromptTextTranslate:
     FUNCTION = "get_value"
     CATEGORY = "conditioning"
     
-    def get_value(self, prompt, source_language="auto", target_language="en"):
+    def get_value(self, prompt, source_language="auto - Auto-detect", target_language="en - English"):
         if prompt.strip():
             prompt = ArgosTranslateManager.translate_text(prompt, source_language, target_language)
         return (prompt,)
@@ -313,8 +324,8 @@ class AT_TextTranslate:
         return {
             "required": {
                 "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
-                "source_language": (language_list, {"default": "auto"}),
-                "target_language": (language_list, {"default": "en"})
+                "source_language": (language_list, {"default": "auto - Auto-detect"}),
+                "target_language": (language_list, {"default": "en - English"})
             }
         }
     
@@ -323,7 +334,7 @@ class AT_TextTranslate:
     FUNCTION = "translate"
     CATEGORY = "text"
     
-    def translate(self, text, source_language="auto", target_language="en"):
+    def translate(self, text, source_language="auto - Auto-detect", target_language="en - English"):
         translated_text = ArgosTranslateManager.translate_text(text, source_language, target_language)
         return (translated_text,)
 
@@ -333,11 +344,11 @@ class AT_LanguagePackageManager:
     def INPUT_TYPES(s):
         language_list = ArgosTranslateManager.get_language_list()
         # Rimuovi 'auto' dalla lista per questo nodo
-        language_list_no_auto = [lang for lang in language_list if lang != "auto"]
+        language_list_no_auto = [lang for lang in language_list if not lang.startswith("auto")]
         return {
             "required": {
-                "source_language": (language_list_no_auto, {"default": "it"}),
-                "target_language": (language_list_no_auto, {"default": "en"}),
+                "source_language": (language_list_no_auto, {"default": "it - Italian (Italiano)"}),
+                "target_language": (language_list_no_auto, {"default": "en - English"}),
                 "action": (["check", "install"], {"default": "check"})
             }
         }
@@ -349,28 +360,32 @@ class AT_LanguagePackageManager:
     
     def manage_package(self, source_language, target_language, action="check"):
         try:
+            # Estrai i codici lingua dai nomi visualizzati
+            source_code = ArgosTranslateManager.get_language_code_from_display(source_language)
+            target_code = ArgosTranslateManager.get_language_code_from_display(target_language)
+            
             if action == "check":
                 # Controlla se il pacchetto è installato
                 installed_languages = argostranslate.translate.get_installed_languages()
-                source_lang = next((lang for lang in installed_languages if lang.code == source_language), None)
-                target_lang = next((lang for lang in installed_languages if lang.code == target_language), None)
+                source_lang = next((lang for lang in installed_languages if lang.code == source_code), None)
+                target_lang = next((lang for lang in installed_languages if lang.code == target_code), None)
                 
                 if source_lang and target_lang:
                     translation = source_lang.get_translation(target_lang)
                     if translation:
-                        return (f"Package {source_language}->{target_language} is installed and ready",)
+                        return (f"Package {source_code}->{target_code} is installed and ready",)
                     else:
-                        return (f"Languages available but no translation model for {source_language}->{target_language}",)
+                        return (f"Languages available but no translation model for {source_code}->{target_code}",)
                 else:
-                    return (f"Package {source_language}->{target_language} is NOT installed",)
+                    return (f"Package {source_code}->{target_code} is NOT installed",)
             
             elif action == "install":
                 # Installa il pacchetto
-                success = ArgosTranslateManager.ensure_translation_package(source_language, target_language)
+                success = ArgosTranslateManager.ensure_translation_package(source_code, target_code)
                 if success:
-                    return (f"Successfully installed package {source_language}->{target_language}",)
+                    return (f"Successfully installed package {source_code}->{target_code}",)
                 else:
-                    return (f"Failed to install package {source_language}->{target_language}",)
+                    return (f"Failed to install package {source_code}->{target_code}",)
             
         except Exception as e:
             return (f"Error: {str(e)}",)
