@@ -1,0 +1,6 @@
+argostranslate
+ctranslate2
+sentencepiece
+pyarrow
+requests
+tqdm
