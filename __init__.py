@@ -269,6 +269,7 @@ class ArgosTranslateManager:
             traceback.print_exc()
             return text
 
+# NODI ORIGINALI
 class AT_CLIPTextTranslate:
     @classmethod
     def INPUT_TYPES(s):
@@ -390,17 +391,225 @@ class AT_LanguagePackageManager:
         except Exception as e:
             return (f"Error: {str(e)}",)
 
-# Mappatura dei nodi
+# NODI AVANZATI
+class AT_UniversalTextTranslate:
+    """Nodo universale per traduzione che supporta sia output di testo che conditioning"""
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        language_list = ArgosTranslateManager.get_language_list()
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+                "source_language": (language_list, {"default": "auto - Auto-detect"}),
+                "target_language": (language_list, {"default": "en - English"}),
+                "output_type": (["text_only", "conditioning_only", "both"], {"default": "both"})
+            },
+            "optional": {
+                "clip": ("CLIP",),  # Optional per permettere conditioning
+            }
+        }
+    
+    RETURN_TYPES = ("STRING", "CONDITIONING")
+    RETURN_NAMES = ("translated_text", "conditioning")
+    FUNCTION = "translate_and_encode"
+    CATEGORY = "conditioning"
+    
+    def translate_and_encode(self, text, source_language="auto - Auto-detect", 
+                           target_language="en - English", output_type="both", clip=None):
+        
+        # Traduci il testo
+        translated_text = ""
+        if text.strip():
+            translated_text = ArgosTranslateManager.translate_text(text, source_language, target_language)
+        else:
+            translated_text = text
+        
+        # Prepara gli output
+        conditioning_output = None
+        
+        if output_type in ["conditioning_only", "both"] and clip is not None:
+            # Genera conditioning solo se CLIP è fornito
+            tokens = clip.tokenize(translated_text)
+            cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
+            conditioning_output = [[cond, {"pooled_output": pooled}]]
+        
+        # Restituisci sempre entrambi gli output, anche se uno è None
+        return (translated_text, conditioning_output)
+
+class AT_CLIPTextTranslateAdvanced:
+    """Versione avanzata del nodo CLIP con più opzioni"""
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        language_list = ArgosTranslateManager.get_language_list()
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+                "clip": ("CLIP",),
+                "source_language": (language_list, {"default": "auto - Auto-detect"}),
+                "target_language": (language_list, {"default": "en - English"}),
+            },
+            "optional": {
+                "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
+                "pass_through_original": ("BOOLEAN", {"default": False}),
+            }
+        }
+    
+    RETURN_TYPES = ("CONDITIONING", "STRING")
+    RETURN_NAMES = ("conditioning", "translated_text")
+    FUNCTION = "encode"
+    CATEGORY = "conditioning"
+    
+    def encode(self, clip, text, source_language="auto - Auto-detect", 
+               target_language="en - English", strength=1.0, pass_through_original=False):
+        
+        original_text = text
+        translated_text = text
+        
+        if text.strip():
+            translated_text = ArgosTranslateManager.translate_text(text, source_language, target_language)
+        
+        # Se pass_through_original è True, usa il testo originale per l'encoding
+        final_text = original_text if pass_through_original else translated_text
+        
+        tokens = clip.tokenize(final_text)
+        cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
+        
+        # Applica strength se diverso da 1.0
+        if strength != 1.0:
+            cond = cond * strength
+        
+        conditioning = [[cond, {"pooled_output": pooled}]]
+        
+        return (conditioning, translated_text)
+
+class AT_CombineConditioning:
+    """Combina conditioning da testi in lingue diverse"""
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "conditioning_1": ("CONDITIONING",),
+                "conditioning_2": ("CONDITIONING",),
+                "method": (["average", "weighted", "concatenate"], {"default": "weighted"}),
+                "weight_1": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.1}),
+                "weight_2": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.1}),
+            }
+        }
+    
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "combine"
+    CATEGORY = "conditioning"
+    
+    def combine(self, conditioning_1, conditioning_2, method="weighted", weight_1=0.7, weight_2=0.3):
+        import torch
+        
+        # Estrai i tensori conditioning
+        cond_1 = conditioning_1[0][0]
+        pooled_1 = conditioning_1[0][1].get("pooled_output", None)
+        
+        cond_2 = conditioning_2[0][0]
+        pooled_2 = conditioning_2[0][1].get("pooled_output", None)
+        
+        if method == "average":
+            combined_cond = (cond_1 + cond_2) / 2
+            combined_pooled = (pooled_1 + pooled_2) / 2 if pooled_1 is not None and pooled_2 is not None else None
+            
+        elif method == "weighted":
+            # Normalizza i pesi
+            total_weight = weight_1 + weight_2
+            w1 = weight_1 / total_weight
+            w2 = weight_2 / total_weight
+            
+            combined_cond = cond_1 * w1 + cond_2 * w2
+            combined_pooled = (pooled_1 * w1 + pooled_2 * w2) if pooled_1 is not None and pooled_2 is not None else None
+            
+        elif method == "concatenate":
+            combined_cond = torch.cat([cond_1, cond_2], dim=1)  # Concatena lungo la dimensione dei token
+            combined_pooled = (pooled_1 + pooled_2) / 2 if pooled_1 is not None and pooled_2 is not None else None
+        
+        result = {"pooled_output": combined_pooled} if combined_pooled is not None else {}
+        
+        return ([[combined_cond, result]],)
+
+class AT_ConditionalTranslate:
+    """Traduce solo se la lingua rilevata è diversa dal target"""
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        language_list = ArgosTranslateManager.get_language_list()
+        # Rimuovi auto-detect per questo nodo
+        language_list_no_auto = [lang for lang in language_list if not lang.startswith("auto")]
+        
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+                "clip": ("CLIP",),
+                "target_language": (language_list_no_auto, {"default": "en - English"}),
+                "always_translate": ("BOOLEAN", {"default": False}),
+            }
+        }
+    
+    RETURN_TYPES = ("CONDITIONING", "STRING", "STRING")
+    RETURN_NAMES = ("conditioning", "final_text", "detected_language")
+    FUNCTION = "conditional_translate"
+    CATEGORY = "conditioning"
+    
+    def conditional_translate(self, text, clip, target_language="en - English", always_translate=False):
+        if not text.strip():
+            tokens = clip.tokenize(text)
+            cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
+            return ([[cond, {"pooled_output": pooled}]], text, "unknown")
+        
+        # Rileva la lingua
+        detected_lang = ArgosTranslateManager.simple_language_detect(text)
+        target_code = ArgosTranslateManager.get_language_code_from_display(target_language)
+        
+        final_text = text
+        
+        # Traduci solo se necessario
+        if always_translate or detected_lang != target_code:
+            final_text = ArgosTranslateManager.translate_text(
+                text, f"{detected_lang} - {ArgosTranslateManager.LANGUAGE_MAP.get(detected_lang, 'Unknown')}", 
+                target_language
+            )
+        
+        # Genera conditioning
+        tokens = clip.tokenize(final_text)
+        cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
+        conditioning = [[cond, {"pooled_output": pooled}]]
+        
+        detected_display = f"{detected_lang} - {ArgosTranslateManager.LANGUAGE_MAP.get(detected_lang, 'Unknown')}"
+        
+        return (conditioning, final_text, detected_display)
+
+# Mappatura completa dei nodi
 NODE_CLASS_MAPPINGS = {
+    # Nodi originali
     "CLIP Text Encode (Translate)": AT_CLIPTextTranslate,
     "Prompt Text (Translate)": AT_PromptTextTranslate,
     "Text Translate": AT_TextTranslate,
     "Language Package Manager": AT_LanguagePackageManager,
+    
+    # Nodi avanzati
+    "Universal Text Translate": AT_UniversalTextTranslate,
+    "CLIP Text Translate Advanced": AT_CLIPTextTranslateAdvanced,
+    "Combine Conditioning": AT_CombineConditioning,
+    "Conditional Translate": AT_ConditionalTranslate,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    # Nodi originali
     "AT_CLIPTextTranslate": "CLIP Text Encode (Translate)",
     "AT_PromptTextTranslate": "Prompt Text (Translate)",
     "AT_TextTranslate": "Text Translate",
     "AT_LanguagePackageManager": "Language Package Manager",
+    
+    # Nodi avanzati
+    "AT_UniversalTextTranslate": "Universal Text Translate",
+    "AT_CLIPTextTranslateAdvanced": "CLIP Text Translate Advanced", 
+    "AT_CombineConditioning": "Combine Conditioning",
+    "AT_ConditionalTranslate": "Conditional Translate",
 }
