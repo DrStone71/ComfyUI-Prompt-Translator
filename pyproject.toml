@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-prompt-translator"
+description = "This custom node for ComfyUI allows you to translate your prompt directly into the language used by your LLM"
+version = "1.0.0"
+license = "GNU"
+
+[project.urls]
+Repository = "https://github.com/DrStone71/ComfyUI-Prompt-Translator.git"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "nkchocoai"
+DisplayName = "ComfyUI-Prompt-Translator"
+Icon = ""
