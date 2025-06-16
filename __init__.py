@@ -285,7 +285,7 @@ class AT_CLIPTextTranslate:
     
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "encode"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def encode(self, clip, text, source_language="auto - Auto-detect", target_language="en - English"):
         if text.strip():
@@ -310,7 +310,7 @@ class AT_PromptTextTranslate:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("prompt",)
     FUNCTION = "get_value"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def get_value(self, prompt, source_language="auto - Auto-detect", target_language="en - English"):
         if prompt.strip():
@@ -333,7 +333,7 @@ class AT_TextTranslate:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("translated_text",)
     FUNCTION = "translate"
-    CATEGORY = "text"
+    CATEGORY = "🌐 DrStone71"
     
     def translate(self, text, source_language="auto - Auto-detect", target_language="en - English"):
         translated_text = ArgosTranslateManager.translate_text(text, source_language, target_language)
@@ -357,7 +357,7 @@ class AT_LanguagePackageManager:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("status",)
     FUNCTION = "manage_package"
-    CATEGORY = "text"
+    CATEGORY = "🌐 DrStone71"
     
     def manage_package(self, source_language, target_language, action="check"):
         try:
@@ -413,7 +413,7 @@ class AT_UniversalTextTranslate:
     RETURN_TYPES = ("STRING", "CONDITIONING")
     RETURN_NAMES = ("translated_text", "conditioning")
     FUNCTION = "translate_and_encode"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def translate_and_encode(self, text, source_language="auto - Auto-detect", 
                            target_language="en - English", output_type="both", clip=None):
@@ -459,7 +459,7 @@ class AT_CLIPTextTranslateAdvanced:
     RETURN_TYPES = ("CONDITIONING", "STRING")
     RETURN_NAMES = ("conditioning", "translated_text")
     FUNCTION = "encode"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def encode(self, clip, text, source_language="auto - Auto-detect", 
                target_language="en - English", strength=1.0, pass_through_original=False):
@@ -501,7 +501,7 @@ class AT_CombineConditioning:
     
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "combine"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def combine(self, conditioning_1, conditioning_2, method="weighted", weight_1=0.7, weight_2=0.3):
         import torch
@@ -555,7 +555,7 @@ class AT_ConditionalTranslate:
     RETURN_TYPES = ("CONDITIONING", "STRING", "STRING")
     RETURN_NAMES = ("conditioning", "final_text", "detected_language")
     FUNCTION = "conditional_translate"
-    CATEGORY = "conditioning"
+    CATEGORY = "🌐 DrStone71"
     
     def conditional_translate(self, text, clip, target_language="en - English", always_translate=False):
         if not text.strip():
