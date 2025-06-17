@@ -1,4 +1,5 @@
 argostranslate
+langdetect
 ctranslate2
 sentencepiece
 pyarrow
